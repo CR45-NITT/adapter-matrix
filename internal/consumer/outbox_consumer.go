@@ -36,6 +36,32 @@ type MessagePayload struct {
 	Format string `json:"format"`
 }
 
+type timetableSlotPayload struct {
+	SlotIndex  int    `json:"slot_index"`
+	CourseCode string `json:"course_code"`
+	StartTime  string `json:"start_time"`
+	EndTime    string `json:"end_time"`
+	Venue      string `json:"venue"`
+	Status     string `json:"status"`
+}
+
+type timetableAnnouncedPayload struct {
+	ClassID      string                 `json:"class_id"`
+	Date         string                 `json:"date"`
+	MatrixRoomID string                 `json:"matrix_room_id"`
+	Template     string                 `json:"template"`
+	Slots        []timetableSlotPayload `json:"slots"`
+}
+
+type timetableUpdatedPayload struct {
+	ClassID        string                 `json:"class_id"`
+	Date           string                 `json:"date"`
+	MatrixRoomID   string                 `json:"matrix_room_id"`
+	UpdateTemplate string                 `json:"update_template"`
+	Slots          []timetableSlotPayload `json:"slots"`
+	UpdatedBy      string                 `json:"updated_by"`
+}
+
 func NewOutboxConsumer(
 	db *sql.DB,
 	repo *repository.AdapterStateRepository,
@@ -132,8 +158,8 @@ func (c *OutboxConsumer) pollTable(ctx context.Context, table string) error {
 }
 
 func (c *OutboxConsumer) processEvent(ctx context.Context, table, eventID, eventType string, payloadBytes []byte) error {
-	var payload MessagePayload
-	if err := json.Unmarshal(payloadBytes, &payload); err != nil {
+	payload, err := decodeEventPayload(eventType, payloadBytes)
+	if err != nil {
 		return c.handleFailure(ctx, eventID, fmt.Errorf("payload decode: %w", err))
 	}
 	payload.Format = strings.ToLower(strings.TrimSpace(payload.Format))
@@ -160,6 +186,74 @@ func (c *OutboxConsumer) processEvent(ctx context.Context, table, eventID, event
 	}
 
 	return c.repo.MarkSent(ctx, eventID)
+}
+
+func decodeEventPayload(eventType string, payloadBytes []byte) (MessagePayload, error) {
+	var messagePayload MessagePayload
+	if err := json.Unmarshal(payloadBytes, &messagePayload); err == nil {
+		if strings.TrimSpace(messagePayload.RoomID) != "" || strings.TrimSpace(messagePayload.Body) != "" {
+			return messagePayload, nil
+		}
+	}
+
+	switch strings.TrimSpace(eventType) {
+	case "DailyTimetableAnnounced":
+		var payload timetableAnnouncedPayload
+		if err := json.Unmarshal(payloadBytes, &payload); err != nil {
+			return MessagePayload{}, err
+		}
+		if strings.TrimSpace(payload.MatrixRoomID) == "" {
+			return MessagePayload{}, errors.New("daily announcement missing matrix_room_id")
+		}
+		return MessagePayload{
+			RoomID: payload.MatrixRoomID,
+			Body:   renderTimetableMessage(payload.Template, payload.Date, payload.Slots),
+			Format: "markdown",
+		}, nil
+	case "TimetableUpdated":
+		var payload timetableUpdatedPayload
+		if err := json.Unmarshal(payloadBytes, &payload); err != nil {
+			return MessagePayload{}, err
+		}
+		if strings.TrimSpace(payload.MatrixRoomID) == "" {
+			return MessagePayload{}, errors.New("timetable update missing matrix_room_id")
+		}
+		return MessagePayload{
+			RoomID: payload.MatrixRoomID,
+			Body:   renderTimetableMessage(payload.UpdateTemplate, payload.Date, payload.Slots),
+			Format: "markdown",
+		}, nil
+	default:
+		return MessagePayload{}, errors.New("unsupported event payload")
+	}
+}
+
+func renderTimetableMessage(templateText, date string, slots []timetableSlotPayload) string {
+	title := strings.TrimSpace(templateText)
+	if title == "" {
+		title = "Timetable update"
+	}
+
+	lines := make([]string, 0, len(slots)+2)
+	lines = append(lines, title)
+	if strings.TrimSpace(date) != "" {
+		lines = append(lines, "Date: "+date)
+	}
+
+	for _, slot := range slots {
+		line := fmt.Sprintf("%d. %s (%s-%s) @ %s [%s]", slot.SlotIndex, safeText(slot.CourseCode), safeText(slot.StartTime), safeText(slot.EndTime), safeText(slot.Venue), safeText(slot.Status))
+		lines = append(lines, line)
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+func safeText(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return "-"
+	}
+	return trimmed
 }
 
 func (c *OutboxConsumer) handleFailure(ctx context.Context, eventID string, err error) error {
