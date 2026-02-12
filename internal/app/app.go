@@ -10,6 +10,7 @@ import (
 	"adapter-matrix/internal/consumer"
 	"adapter-matrix/internal/matrix"
 	"adapter-matrix/internal/repository"
+	adaptermigrations "adapter-matrix/migrations"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
@@ -55,6 +56,10 @@ func New(cfg Config, logger *log.Logger) (*App, error) {
 	db.SetConnMaxLifetime(30 * time.Minute)
 
 	if err := db.Ping(); err != nil {
+		return nil, err
+	}
+
+	if err := adaptermigrations.Up(db); err != nil {
 		return nil, err
 	}
 
