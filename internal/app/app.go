@@ -17,6 +17,7 @@ import (
 type Config struct {
 	DatabaseURL     string
 	HomeserverURL   string
+	MatrixUserID    string
 	AccessToken     string
 	PollInterval    time.Duration
 	MaxRetries      int
@@ -57,7 +58,7 @@ func New(cfg Config, logger *log.Logger) (*App, error) {
 		return nil, err
 	}
 
-	matrixClient, err := matrix.NewClient(cfg.HomeserverURL, cfg.AccessToken, cfg.AllowedRoomIDs, logger)
+	matrixClient, err := matrix.NewClient(cfg.HomeserverURL, cfg.MatrixUserID, cfg.AccessToken, cfg.AllowedRoomIDs, logger)
 	if err != nil {
 		return nil, err
 	}

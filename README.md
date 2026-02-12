@@ -11,3 +11,9 @@ It runs as a background worker that:
 - transforms supported events into Matrix messages
 - sends messages to allow-listed Matrix rooms
 - writes delivery state and failures back to adapter tables
+
+## Required Matrix Configuration
+
+- `MATRIX_HOMESERVER_URL` (e.g. `https://matrix.example.com`)
+- `MATRIX_USER_ID` (must look like `@user:domain`)
+- `MATRIX_ACCESS_TOKEN` (for the same `MATRIX_USER_ID` on that homeserver)

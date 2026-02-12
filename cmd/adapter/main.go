@@ -46,6 +46,7 @@ func loadConfig() (app.Config, error) {
 
 	cfg.DatabaseURL = strings.TrimSpace(os.Getenv("DATABASE_URL"))
 	cfg.HomeserverURL = strings.TrimSpace(os.Getenv("MATRIX_HOMESERVER_URL"))
+	cfg.MatrixUserID = strings.TrimSpace(os.Getenv("MATRIX_USER_ID"))
 	cfg.AccessToken = strings.TrimSpace(os.Getenv("MATRIX_ACCESS_TOKEN"))
 	cfg.AdapterOutbox = strings.TrimSpace(getEnv("ADAPTER_OUTBOX_TABLE", "adapter_outbox"))
 
@@ -83,6 +84,12 @@ func loadConfig() (app.Config, error) {
 	if cfg.DatabaseURL == "" || cfg.HomeserverURL == "" || cfg.AccessToken == "" {
 		return cfg, errMissingEnv
 	}
+	if cfg.MatrixUserID == "" {
+		return cfg, errMissingMatrixUserID
+	}
+	if !isValidMatrixUserID(cfg.MatrixUserID) {
+		return cfg, errInvalidMatrixUserID
+	}
 	if len(cfg.OutboxTables) == 0 {
 		return cfg, errMissingOutboxTables
 	}
@@ -94,6 +101,17 @@ func loadConfig() (app.Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func isValidMatrixUserID(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return false
+	}
+	if !strings.HasPrefix(trimmed, "@") {
+		return false
+	}
+	return strings.Contains(trimmed, ":")
 }
 
 func splitCSV(input string) []string {
@@ -116,7 +134,9 @@ func getEnv(key, fallback string) string {
 }
 
 var (
-	errMissingEnv          = &configError{"required env vars missing"}
+	errMissingEnv          = &configError{"required env vars missing: DATABASE_URL, MATRIX_HOMESERVER_URL, MATRIX_ACCESS_TOKEN"}
+	errMissingMatrixUserID = &configError{"MATRIX_USER_ID is required"}
+	errInvalidMatrixUserID = &configError{"MATRIX_USER_ID must look like @user:domain"}
 	errMissingOutboxTables = &configError{"OUTBOX_TABLES is required"}
 	errInvalidMaxRetries   = &configError{"MAX_RETRIES must be >= 1"}
 	errInvalidBatchSize    = &configError{"OUTBOX_BATCH_SIZE must be >= 1"}

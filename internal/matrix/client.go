@@ -20,11 +20,25 @@ type Client struct {
 	logger       *log.Logger
 }
 
-func NewClient(homeserverURL, accessToken string, allowedRooms []string, logger *log.Logger) (*Client, error) {
+func NewClient(homeserverURL, userID, accessToken string, allowedRooms []string, logger *log.Logger) (*Client, error) {
 	if logger == nil {
 		return nil, errors.New("logger is required")
 	}
-	cli, err := mautrix.NewClient(homeserverURL, "", accessToken)
+	if strings.TrimSpace(homeserverURL) == "" {
+		return nil, errors.New("homeserver URL is required")
+	}
+	if strings.TrimSpace(accessToken) == "" {
+		return nil, errors.New("access token is required")
+	}
+	trimmedUserID := strings.TrimSpace(userID)
+	if trimmedUserID == "" {
+		return nil, errors.New("matrix user ID is required")
+	}
+	if !strings.HasPrefix(trimmedUserID, "@") || !strings.Contains(trimmedUserID, ":") {
+		return nil, errors.New("matrix user ID must look like @user:domain")
+	}
+
+	cli, err := mautrix.NewClient(homeserverURL, id.UserID(trimmedUserID), accessToken)
 	if err != nil {
 		return nil, err
 	}
