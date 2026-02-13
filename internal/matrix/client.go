@@ -103,9 +103,11 @@ func (c *Client) handleMemberEvent(ctx context.Context, evt *event.Event) {
 		return
 	}
 
-	if err := evt.Content.ParseRaw(event.StateMember); err != nil {
-		c.logger.Printf("matrix: failed to parse membership event: %v", err)
-		return
+	if evt.Content.Parsed == nil {
+		if err := evt.Content.ParseRaw(event.StateMember); err != nil {
+			c.logger.Printf("matrix: failed to parse membership event: %v", err)
+			return
+		}
 	}
 	content, ok := evt.Content.Parsed.(*event.MemberEventContent)
 	if !ok {
