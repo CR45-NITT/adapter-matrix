@@ -21,6 +21,23 @@ func main() {
 		logger.Fatalf("config error: %v", err)
 	}
 
+	debugEnabled := strings.EqualFold(strings.TrimSpace(getEnv("LOG_LEVEL", "info")), "debug")
+	debugf := func(format string, args ...any) {
+		if debugEnabled {
+			logger.Printf("[DEBUG] "+format, args...)
+		}
+	}
+	debugf("config loaded: homeserver_url=%s matrix_user_id=%s outbox_tables=%v adapter_outbox=%s poll_interval=%s max_retries=%d batch_size=%d allowed_room_ids=%v",
+		cfg.HomeserverURL,
+		cfg.MatrixUserID,
+		cfg.OutboxTables,
+		cfg.AdapterOutbox,
+		cfg.PollInterval,
+		cfg.MaxRetries,
+		cfg.OutboxBatchSize,
+		cfg.AllowedRoomIDs,
+	)
+
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -32,6 +49,7 @@ func main() {
 	if err := application.Start(ctx); err != nil {
 		logger.Fatalf("app start error: %v", err)
 	}
+	debugf("application started")
 
 	<-ctx.Done()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -39,6 +57,7 @@ func main() {
 	if err := application.Stop(shutdownCtx); err != nil {
 		logger.Printf("shutdown error: %v", err)
 	}
+	debugf("application stopped")
 }
 
 func loadConfig() (app.Config, error) {
